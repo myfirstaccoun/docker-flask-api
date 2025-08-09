@@ -1,26 +1,31 @@
 FROM python:3-alpine AS builder
- 
+
 WORKDIR /app
- 
+
+# تثبيت ffmpeg
+RUN apk add --no-cache ffmpeg
+
 RUN python3 -m venv venv
 ENV VIRTUAL_ENV=/app/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
- 
+
 COPY requirements.txt .
-RUN pip install -r requirements.txt
- 
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Stage 2
 FROM python:3-alpine AS runner
- 
+
 WORKDIR /app
- 
+
+# تثبيت ffmpeg برضه في مرحلة التشغيل
+RUN apk add --no-cache ffmpeg
+
 COPY --from=builder /app/venv venv
 COPY app.py app.py
- 
+
 ENV VIRTUAL_ENV=/app/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-ENV FLASK_APP=app/app.py
- 
-EXPOSE 8080
- 
-CMD ["gunicorn", "--bind" , ":8000", "--workers", "2", "app:app"]
+ENV FLASK_APP=app.py
+
+EXPOSE 8000
+CMD ["gunicorn", "--bind", ":8000", "--workers", "2", "app:app"]
