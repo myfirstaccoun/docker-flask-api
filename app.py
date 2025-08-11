@@ -155,6 +155,8 @@ def start_client():
     async def runner():
         await client.start()
 
+    loop_ready.set()  # هنا نعلم أن telethon_loop جاهز
+
     telethon_loop.run_until_complete(runner())
     telethon_loop.run_forever()
 
