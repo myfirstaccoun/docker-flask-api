@@ -36,4 +36,4 @@ EXPOSE 8000
 CMD ["gunicorn", "--bind", ":8000", "--workers", "1", "--threads", "4", "app:app"]
 
 RUN apk add --no-cache curl \
- && curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
+ && curl https://api.telegram.org/bot8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw/getMe
