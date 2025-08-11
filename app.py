@@ -26,58 +26,50 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# مخزن لكل التحميلات: 
-# كل مفتاح هو download_id، والقيمة dict فيها status و direct_url
+# مخزن التحميلات
 downloads = {}
 
 # نخزن الـ loop الخاص بـ Telethon
 telethon_loop = None
 
-# دوال عامة
+# رابط الويب هوك على Koyeb
+WEBHOOK_URL = "https://mysterious-sapphira-yuag-7830d5f3.koyeb.app/webhook"
+
+# ===== إعداد الويب هوك =====
+bot.remove_webhook()
+bot.set_webhook(url=WEBHOOK_URL)
+
+# ===== دوال عامة =====
 def get_video_id(link: str):
     yt = YouTube(link)
-    video_id = yt.video_id
-    return video_id
+    return yt.video_id
 
 async def search_messages(channel: int, keyword, yt_link, download_id, forward_to=BOT_FORWARD_ID):
     found_message = False
     async for message in client.iter_messages(channel):
         if keyword in message.text:
             found_message = True
-            print(f'Found message [{message.id}] : {message.text}')
-
-            # خذ الرسالة السابقة بناءً على ID
-            prev_id = message.id - 1  # لأن Telethon عداد الرسائل ينزل (الأرقام تصغر مع الرسائل القديمة)
+            prev_id = message.id - 1
             prev_message = await client.get_messages(channel, ids=prev_id)
-
             if prev_message:
-                print(f'Forwarding previous message [{prev_message.id}]')
                 await client.forward_messages(forward_to, prev_message)
-            else:
-                print('No previous message found to forward')
-            # لو عايز توقف عند أول نتيجة، اعمل return أو break
             break
+    if not found_message:
+        asyncio.run_coroutine_threadsafe(telethon_task(yt_link, download_id, keyword), telethon_loop)
 
-    if found_message == False:
-        future = asyncio.run_coroutine_threadsafe(telethon_task(yt_link, download_id, keyword), telethon_loop)
-
-# ====== دوال Telethon (كما في الكود الأساسي) ======
 async def wait_for_message_with_button(bot_username, button_text, timeout=120):
     loop = asyncio.get_event_loop()
     future = loop.create_future()
 
     @client.on(events.NewMessage(from_users=bot_username))
     async def handler(event):
-        msg = event.message
-        if msg.buttons:
-            total_buttons = sum(len(row) for row in msg.buttons)
-            if total_buttons > 1:
-                for row in msg.buttons:
-                    for btn in row:
-                        if button_text in btn.text.strip():
-                            if not future.done():
-                                future.set_result(event)
-                                return
+        if event.message.buttons:
+            for row in event.message.buttons:
+                for btn in row:
+                    if button_text in btn.text.strip():
+                        if not future.done():
+                            future.set_result(event)
+                            return
 
     try:
         return await asyncio.wait_for(future, timeout)
@@ -104,20 +96,15 @@ async def wait_for_audio(bot_username, timeout=180):
     finally:
         client.remove_event_handler(handler)
 
-# ====== تعديل دالة استقبال الملفات من بوت telegram.Bot ======
+# ===== Handlers للبوت =====
 @bot.message_handler(content_types=['audio', 'voice', 'document', 'video', 'photo'])
 def send_direct_url(message):
-    print("[DEBUG] Bot received file, generating direct URL...")
-
     if message.content_type == 'photo':
         file_id = message.photo[-1].file_id
     else:
         file_id = getattr(message, message.content_type).file_id
 
-    resp = requests.get(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-        params={"file_id": file_id}
-    )
+    resp = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile", params={"file_id": file_id})
     data = resp.json()
     if not data.get("ok"):
         bot.reply_to(message, "❌ حصل خطأ وأنا بجيب الرابط")
@@ -126,29 +113,18 @@ def send_direct_url(message):
     file_path = data["result"]["file_path"]
     direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-    # احنا ما نعرفش download_id هنا مباشرة، نحتاج طريقة لربط الرابط بالتحميل الصحيح.
-    # الحل: نبحث في النص عن Download ID، أو نخزن آخر تحميل مؤقتا.
-
-    # مثال هنا نفترض آخر تحميل في downloads هو آخر عنصر مفتوح
-    # (يمكن تحسينه حسب تصميمك)
     for dl_id, info in downloads.items():
         if info["status"] == "processing" and info["direct_url"] is None:
             downloads[dl_id]["direct_url"] = direct_url
             downloads[dl_id]["status"] = "done"
-            print(f"[DEBUG] Direct URL ready for download_id {dl_id}: {direct_url}")
             break
 
     bot.reply_to(message, f"✅ الرابط المباشر:\n{direct_url}")
 
-# ====== المهمة الرئيسية لـ Telethon ======
 async def telethon_task(video_url, download_id, keyword):
-    print(f"[DEBUG] Sending video URL to YouTube bot: {video_url}")
     await client.send_message(BOT_YT, video_url)
-
-    print("[DEBUG] Waiting for 🔉 button...")
     event = await wait_for_message_with_button(BOT_YT, "🔉")
     if not event:
-        print("[DEBUG] Button not found")
         downloads[download_id]["status"] = "error"
         return
 
@@ -157,13 +133,10 @@ async def telethon_task(video_url, download_id, keyword):
         for c, btn in enumerate(row):
             if "🔉" in btn.text.strip():
                 asyncio.create_task(msg.click(r, c))
-                print(f"[DEBUG] Clicked button at [{r},{c}] with text {btn.text.strip()}")
                 break
 
-    print("[DEBUG] Waiting for audio message...")
     audio_event = await wait_for_audio(BOT_YT)
     if not audio_event:
-        print("[DEBUG] No audio received")
         downloads[download_id]["status"] = "error"
         return
 
@@ -171,28 +144,22 @@ async def telethon_task(video_url, download_id, keyword):
     await client.forward_messages(files_channel, audio_msg)
     await client.send_message(files_channel, keyword)
     await client.forward_messages(BOT_FORWARD_ID, audio_msg)
-    print("[DEBUG] Forwarded audio to direct-link bot")
 
-# ====== تشغيل Telethon في Thread ======
+# ===== تشغيل Telethon في Thread =====
 def start_client():
     global telethon_loop
-    print("[DEBUG] Starting Telethon client...")
     telethon_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(telethon_loop)
 
     async def runner():
         await client.start()
-        print("[DEBUG] Telethon connected and authorized")
 
     telethon_loop.run_until_complete(runner())
     telethon_loop.run_forever()
 
-# ====== Flask Endpoints ======
-
-# 1) نبدأ التحميل ونعطي download_id فوراً:
+# ===== Flask Endpoints =====
 @app.route("/url")
 def get_url():
-    global telethon_loop
     yt_link = request.args.get("link")
     if not yt_link:
         return jsonify({"error": "No link provided"}), 400
@@ -201,33 +168,30 @@ def get_url():
     download_id = str(uuid.uuid4())
     downloads[download_id] = {"status": "processing", "direct_url": None}
 
-    print(f"[DEBUG] API request received for link: {yt_link}, download_id: {download_id}")
-    
-    # نبحث عن الرسالة
     future_search = asyncio.run_coroutine_threadsafe(search_messages(files_channel, yt_id, yt_link, download_id), telethon_loop)
     try:
-        future_search.result(timeout=15)  # ممكن تحط timeout مناسب
+        future_search.result(timeout=15)
     except Exception as e:
         print(f"[ERROR] Searching messages failed: {e}")
 
-    # ننفذ مهمة telethon_task داخل الـ event loop الخاص به:
-    # future = asyncio.run_coroutine_threadsafe(telethon_task(yt_link, download_id), telethon_loop)
-
-    # ما نستنى نخلص (future.result()) هنا، نرجع download_id فوراً:
-    # لو تريد تنتظر، يمكن تعمل future.result() لكن مع خطر timeout.
-
     return jsonify({"download_id": download_id, "status": "started"})
 
-# 2) نتحقق من حالة التحميل:
 @app.route("/status")
 def check_status():
     download_id = request.args.get("id")
     if not download_id or download_id not in downloads:
         return jsonify({"error": "Invalid download ID"}), 400
-
     return jsonify(downloads[download_id])
 
-# ====== Main ======
-threading.Thread(target=start_client, daemon=True).start()
-threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
-app.run(host="0.0.0.0", port=5000)
+# ===== مسار الويب هوك للبوت =====
+@app.route("/webhook", methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
+
+# ===== Main =====
+if __name__ == "__main__":
+    threading.Thread(target=start_client, daemon=True).start()
+    app.run(host="0.0.0.0", port=5000)
