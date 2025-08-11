@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from telethon import TelegramClient, events
 import telebot
+from telebot import types
 import asyncio
 import requests
 import threading
@@ -26,10 +27,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# مخزن التحميلات
 downloads = {}
-
-# نخزن الـ loop الخاص بـ Telethon
 telethon_loop = None
 
 # رابط الويب هوك على Koyeb
@@ -195,4 +193,3 @@ def webhook():
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
     app.run(host="0.0.0.0", port=5000)
-
