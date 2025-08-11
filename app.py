@@ -29,6 +29,7 @@ CORS(app)
 
 downloads = {}
 telethon_loop = None
+loop_ready = threading.Event()
 
 # رابط الويب هوك على Koyeb
 WEBHOOK_URL = "https://mysterious-sapphira-yuag-7830d5f3.koyeb.app/webhook"
@@ -196,4 +197,5 @@ def webhook():
 # ===== Main =====
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
+    loop_ready.wait()  # ننتظر حتى تتأكد أن telethon_loop جاهز
     app.run(host="0.0.0.0", port=5000)
