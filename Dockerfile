@@ -35,5 +35,5 @@ EXPOSE 8000
 # تشغيل Gunicorn بـ Worker واحد و4 Threads لتفادي مشكلة SQLite
 CMD ["gunicorn", "--bind", ":8000", "--workers", "1", "--threads", "4", "app:app"]
 
-apk add --no-cache curl
-curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
+RUN apk add --no-cache curl \
+ && curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
