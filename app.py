@@ -162,6 +162,8 @@ def start_client():
 @app.route("/url")
 def get_url():
     global telethon_loop
+    if telethon_loop is None:
+        return jsonify({"error": "Service not ready, please try again later."}), 503
 
     yt_link = request.args.get("link")
     if not yt_link:
