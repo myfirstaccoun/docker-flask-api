@@ -175,7 +175,7 @@ async def telethon_task(video_url, download_id, keyword):
 
 telethon_ready = threading.Event()
 def start_client():
-    global telethon_loop
+    # global telethon_loop
     print("[DEBUG] Starting Telethon client...")
     telethon_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(telethon_loop)
