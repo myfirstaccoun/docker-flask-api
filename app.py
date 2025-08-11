@@ -156,6 +156,7 @@ def start_client():
         await client.start()
 
     loop_ready.set()  # هنا نعلم أن telethon_loop جاهز
+    print("[INFO] Telethon event loop is ready.")
 
     telethon_loop.run_until_complete(runner())
     telethon_loop.run_forever()
@@ -202,4 +203,6 @@ def webhook():
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
     loop_ready.wait()  # ننتظر حتى تتأكد أن telethon_loop جاهز
+    print("[INFO] Starting Flask server...")
+
     app.run(host="0.0.0.0", port=5000)
