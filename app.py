@@ -173,17 +173,15 @@ async def telethon_task(video_url, download_id, keyword):
     await client.forward_messages(BOT_FORWARD_ID, audio_msg)
     print("[DEBUG] Forwarded audio to direct-link bot")
 
-telethon_ready = threading.Event()
+telethon_loop = asyncio.new_event_loop()
 def start_client():
-    # global telethon_loop
+    global telethon_loop
     print("[DEBUG] Starting Telethon client...")
-    telethon_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(telethon_loop)
 
     async def runner():
         await client.start()
         print("[DEBUG] Telethon connected and authorized")
-        telethon_ready.set()  # يخبر أن Telethon جاهز
 
     telethon_loop.run_until_complete(runner())
     telethon_loop.run_forever()
@@ -234,7 +232,5 @@ def check_status():
 # ====== Main ======
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
-    telethon_ready.wait()  # انتظار بدء Telethon
-
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
     app.run(host="0.0.0.0", port=5000)
