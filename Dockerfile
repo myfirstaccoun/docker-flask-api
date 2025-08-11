@@ -25,6 +25,7 @@ RUN apk add --no-cache ffmpeg
 # نسخ البيئة الافتراضية من مرحلة البناء
 COPY --from=builder /app/venv venv
 COPY app.py app.py
+COPY session_name.session .
 
 ENV VIRTUAL_ENV=/app/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -34,6 +35,3 @@ EXPOSE 8000
 
 # تشغيل Gunicorn بـ Worker واحد و4 Threads لتفادي مشكلة SQLite
 CMD ["gunicorn", "--bind", ":8000", "--workers", "1", "--threads", "4", "app:app"]
-
-RUN apk add --no-cache curl \
- && curl https://api.telegram.org/bot8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw/getMe
