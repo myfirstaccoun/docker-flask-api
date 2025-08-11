@@ -187,11 +187,12 @@ def check_status():
 @app.route("/webhook", methods=['POST'])
 def webhook():
     json_str = request.get_data().decode('UTF-8')
-    update = telebot.types.Update.de_json(json_str)
+    update = types.Update.de_json(json_str)
     bot.process_new_updates([update])
-    return '', 200
+    return 'ok', 200
 
 # ===== Main =====
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
     app.run(host="0.0.0.0", port=5000)
+
