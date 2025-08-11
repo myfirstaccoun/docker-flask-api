@@ -173,7 +173,7 @@ async def telethon_task(video_url, download_id, keyword):
     await client.forward_messages(BOT_FORWARD_ID, audio_msg)
     print("[DEBUG] Forwarded audio to direct-link bot")
 
-# ====== تشغيل Telethon في Thread ======
+telethon_ready = threading.Event()
 def start_client():
     global telethon_loop
     print("[DEBUG] Starting Telethon client...")
@@ -183,6 +183,7 @@ def start_client():
     async def runner():
         await client.start()
         print("[DEBUG] Telethon connected and authorized")
+        telethon_ready.set()  # يخبر أن Telethon جاهز
 
     telethon_loop.run_until_complete(runner())
     telethon_loop.run_forever()
@@ -193,6 +194,9 @@ def start_client():
 @app.route("/url")
 def get_url():
     global telethon_loop
+    if telethon_loop is None:
+        return jsonify({"error": "Service not ready, please try again later"}), 503
+
     yt_link = request.args.get("link")
     if not yt_link:
         return jsonify({"error": "No link provided"}), 400
@@ -228,9 +232,9 @@ def check_status():
     return jsonify(downloads[download_id])
 
 # ====== Main ======
-print("mmmmmmmmmmmmmmmmmmmmmmmmmmmm")
 if __name__ == "__main__":
-    print("lllllllllllllllllllllllllllll")
     threading.Thread(target=start_client, daemon=True).start()
+    telethon_ready.wait()  # انتظار بدء Telethon
+
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
     app.run(host="0.0.0.0", port=5000)
