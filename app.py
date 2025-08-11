@@ -228,7 +228,6 @@ def check_status():
     return jsonify(downloads[download_id])
 
 # ====== Main ======
-if __name__ == "__main__":
-    threading.Thread(target=start_client, daemon=True).start()
-    threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+threading.Thread(target=start_client, daemon=True).start()
+threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
+app.run(host="0.0.0.0", port=5000)
