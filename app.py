@@ -201,7 +201,9 @@ def webhook():
 
 # ===== Main =====
 if __name__ == "__main__":
+    print("[INFO] Start...")
     threading.Thread(target=start_client, daemon=True).start()
+    print("[INFO] Threading done...")
     loop_ready.wait()  # ننتظر حتى تتأكد أن telethon_loop جاهز
     print("[INFO] Starting Flask server...")
 
