@@ -43,6 +43,8 @@ def get_video_id(link: str):
     return yt.video_id
 
 async def search_messages(channel: int, keyword, yt_link, download_id, forward_to=BOT_FORWARD_ID):
+    global telethon_loop
+
     found_message = False
     async for message in client.iter_messages(channel):
         if keyword in message.text:
@@ -158,6 +160,8 @@ def start_client():
 # ===== Flask Endpoints =====
 @app.route("/url")
 def get_url():
+    global telethon_loop
+
     yt_link = request.args.get("link")
     if not yt_link:
         return jsonify({"error": "No link provided"}), 400
