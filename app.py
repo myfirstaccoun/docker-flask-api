@@ -21,8 +21,7 @@ files_channel = -1002765670994
 BOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
 CHAT_ID = 123456789  # ID المحادثة اللي هيجيلها الرابط
 
-session_str = ''
-client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
+client = TelegramClient('session_name', API_ID, API_HASH)
 bot = telebot.TeleBot(BOT_TOKEN)
 
 app = Flask(__name__)
