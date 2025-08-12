@@ -179,6 +179,7 @@ telethon_loop = asyncio.new_event_loop()
 client_ready_event = threading.Event()
 is_started = False
 def start_client():
+    is_started = 1
     global telethon_loop
     print("[DEBUG] Starting Telethon client...")
     asyncio.set_event_loop(telethon_loop)
