@@ -244,4 +244,4 @@ if __name__ == "__main__":
     client_ready_event.wait()
 
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=8000)
