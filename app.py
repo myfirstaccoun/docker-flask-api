@@ -44,7 +44,10 @@ CORS(app)
 downloads = {}
 
 # حدث للإشارة إلى جاهزية Telethon
-client_ready_event = threading.Event()  # <-- الإصلاح هنا
+client_ready_event = threading.Event()
+
+# حلقة الأحداث الخاصة بـ Telethon
+telethon_loop = None  # <-- إضافة هذا المتغير
 
 # دوال عامة
 def get_video_id(link: str):
@@ -196,10 +199,11 @@ async def telethon_task(video_url, download_id, keyword):
 
 # ====== إدارة دورة حياة Telethon ======
 def run_telethon():
-    global client_ready_event  # <-- الإصلاح هنا
+    global client_ready_event, telethon_loop
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    telethon_loop = loop  # <-- حفظ حلقة الأحداث
     
     while True:
         try:
@@ -211,7 +215,7 @@ def run_telethon():
         except Exception as e:
             logger.error(f"Telethon crashed: {e}")
             client_ready_event.clear()
-            time.sleep(10)  # انتظار قبل إعادة المحاولة
+            time.sleep(10)
             logger.info("Restarting Telethon...")
 
 # ====== Flask Endpoints ======
@@ -233,10 +237,10 @@ def get_url():
 
     logger.info(f"API request: {yt_link}, download_id: {download_id}")
     
-    # البحث عن الرسالة
+    # البحث عن الرسالة باستخدام حلقة الأحداث الصحيحة
     asyncio.run_coroutine_threadsafe(
         search_messages(files_channel, yt_id, yt_link, download_id), 
-        client.loop
+        telethon_loop  # <-- استخدام المتغير الذي حفظناه
     )
 
     return jsonify({"download_id": download_id, "status": "started"})
@@ -259,18 +263,14 @@ def home():
 def start_services():
     global client_ready_event
     
-    # إعادة ضبط الحدث في حالة إعادة التشغيل
     client_ready_event.clear()
     
-    # بدء Telethon في thread منفصل
     telethon_thread = threading.Thread(target=run_telethon, daemon=True, name="TelethonThread")
     telethon_thread.start()
     
-    # انتظار تهيئة Telethon (بحد أقصى 60 ثانية)
     if not client_ready_event.wait(timeout=60):
         logger.error("Telethon failed to start within timeout")
     
-    # بدء Telebot
     bot_thread = threading.Thread(
         target=lambda: bot.infinity_polling(logger_level=logging.INFO),
         daemon=True,
@@ -285,5 +285,4 @@ if __name__ == "__main__":
     start_services()
     app.run(host="0.0.0.0", port=8000)
 else:
-    # تهيئة عند التشغيل مع Gunicorn
     start_services()
