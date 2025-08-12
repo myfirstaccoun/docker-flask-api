@@ -177,28 +177,40 @@ async def telethon_task(video_url, download_id, keyword):
 
 telethon_loop = asyncio.new_event_loop()
 client_ready_event = threading.Event()
-def start_client():
-    global telethon_loop
-    print("[DEBUG] Starting Telethon client...")
-    asyncio.set_event_loop(telethon_loop)
+# def start_client():
+#     global telethon_loop
+#     print("[DEBUG] Starting Telethon client...")
+#     asyncio.set_event_loop(telethon_loop)
 
-    async def runner():
-        await client.start()
-        print("[DEBUG] Telethon connected and authorized")
-        client_ready_event.set()  # هنا بنعلم إن client جاهز
+#     async def runner():
+#         await client.start()
+#         print("[DEBUG] Telethon connected and authorized")
+#         client_ready_event.set()  # هنا بنعلم إن client جاهز
 
-    telethon_loop.run_until_complete(runner())
-    telethon_loop.run_forever()
+#     telethon_loop.run_until_complete(runner())
+#     telethon_loop.run_forever()
 
 # ====== Flask Endpoints ======
 
 # 1) نبدأ التحميل ونعطي download_id فوراً:
 @app.route("/url")
 def get_url():
+    global telethon_loop
+    if not client_ready_event.is_set():
+        print("[DEBUG] Starting Telethon client...")
+        asyncio.set_event_loop(telethon_loop)
+    
+        async def runner():
+            await client.start()
+            print("[DEBUG] Telethon connected and authorized")
+            client_ready_event.set()  # هنا بنعلم إن client جاهز
+    
+        telethon_loop.run_until_complete(runner())
+        telethon_loop.run_forever()
+
     if not client_ready_event.is_set():
         return jsonify({"error": "Service not ready, please try again later"}), 503
 
-    global telethon_loop
     if telethon_loop is None:
         return jsonify({"error": "Service not ready, please try again later"}), 503
 
@@ -238,10 +250,10 @@ def check_status():
 
 # ====== Main ======
 if __name__ == "__main__":
-    threading.Thread(target=start_client, daemon=True).start()
+    # threading.Thread(target=start_client, daemon=True).start()
 
-    # انتظر حتى client يبدأ
-    client_ready_event.wait()
+    # # انتظر حتى client يبدأ
+    # client_ready_event.wait()
 
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
     app.run(host="0.0.0.0", port=8000)
