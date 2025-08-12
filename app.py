@@ -208,7 +208,7 @@ def get_url():
     yt_id = get_video_id(yt_link)
 
     download_id = str(uuid.uuid4())
-    downloads[download_id] = {"status": "processing", "direct_url": None}
+    downloads[download_id] = {"download_id": download_id, "status": "processing", "direct_url": None}
 
     print(f"[DEBUG] API request received for link: {yt_link}, download_id: {download_id}")
     
