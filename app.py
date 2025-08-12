@@ -34,8 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===== إعداد الجلسة =====
-session_str = ''
-client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
+client = TelegramClient('session_name', API_ID, API_HASH)
 bot = telebot.TeleBot(BOT_TOKEN)
 
 app = Flask(__name__)
@@ -43,6 +42,9 @@ CORS(app)
 
 # مخزن لكل التحميلات
 downloads = {}
+
+# حدث للإشارة إلى جاهزية Telethon
+client_ready_event = threading.Event()  # <-- الإصلاح هنا
 
 # دوال عامة
 def get_video_id(link: str):
@@ -194,6 +196,8 @@ async def telethon_task(video_url, download_id, keyword):
 
 # ====== إدارة دورة حياة Telethon ======
 def run_telethon():
+    global client_ready_event  # <-- الإصلاح هنا
+    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -253,12 +257,18 @@ def home():
 
 # ====== بدء الخدمات ======
 def start_services():
+    global client_ready_event
+    
+    # إعادة ضبط الحدث في حالة إعادة التشغيل
+    client_ready_event.clear()
+    
     # بدء Telethon في thread منفصل
     telethon_thread = threading.Thread(target=run_telethon, daemon=True, name="TelethonThread")
     telethon_thread.start()
     
-    # انتظار تهيئة Telethon
-    client_ready_event.wait(timeout=30)
+    # انتظار تهيئة Telethon (بحد أقصى 60 ثانية)
+    if not client_ready_event.wait(timeout=60):
+        logger.error("Telethon failed to start within timeout")
     
     # بدء Telebot
     bot_thread = threading.Thread(
