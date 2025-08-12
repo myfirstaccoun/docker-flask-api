@@ -246,7 +246,7 @@ def check_status():
 
 # ====== Main ======
 if __name__ == "__main__":
-    # threading.Thread(target=start_client, daemon=True).start()
+    threading.Thread(target=start_client, daemon=True).start()
 
     # # انتظر حتى client يبدأ
     # client_ready_event.wait()
