@@ -9,8 +9,6 @@ import threading
 import uuid
 from pytube import YouTube
 import time
-import logging
-import sys
 
 # ===== إعدادات Telethon =====
 API_ID = 29224979
@@ -19,71 +17,53 @@ BOT_YT = '@BotYouTubeDownloadBot'
 BOT_FORWARD_ID = "@sending_files_bot"
 files_channel = -1002765670994
 
-# ===== إعدادات Bot API =====
+# ===== إعدادات Bot API (بوتك الشخصي) =====
 BOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
-CHAT_ID = 123456789
+CHAT_ID = 123456789  # ID المحادثة اللي هيجيلها الرابط
 
-# ===== تهيئة السجل (Logging) =====
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# ===== إعداد الجلسة =====
-client = TelegramClient('session_name', API_ID, API_HASH)
+session_str = ''
+client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
 bot = telebot.TeleBot(BOT_TOKEN)
 
 app = Flask(__name__)
 CORS(app)
 
-# مخزن لكل التحميلات
+# مخزن لكل التحميلات: 
+# كل مفتاح هو download_id، والقيمة dict فيها status و direct_url
 downloads = {}
 
-# حدث للإشارة إلى جاهزية Telethon
-client_ready_event = threading.Event()
-
-# حلقة الأحداث الخاصة بـ Telethon
-telethon_loop = None  # <-- إضافة هذا المتغير
+# نخزن الـ loop الخاص بـ Telethon
+telethon_loop = None
 
 # دوال عامة
 def get_video_id(link: str):
-    try:
-        yt = YouTube(link)
-        return yt.video_id
-    except Exception as e:
-        logger.error(f"Error getting video ID: {e}")
-        return None
+    yt = YouTube(link)
+    video_id = yt.video_id
+    return video_id
 
 async def search_messages(channel: int, keyword, yt_link, download_id, forward_to=BOT_FORWARD_ID):
-    try:
-        found_message = False
-        async for message in client.iter_messages(channel):
-            if message.text and keyword in message.text:
-                found_message = True
-                logger.info(f'Found message [{message.id}]: {message.text}')
+    found_message = False
+    async for message in client.iter_messages(channel):
+        if message.text and keyword in message.text:
+            found_message = True
+            print(f'Found message [{message.id}] : {message.text}')
 
-                prev_id = message.id - 1
-                prev_message = await client.get_messages(channel, ids=prev_id)
+            # خذ الرسالة السابقة بناءً على ID
+            prev_id = message.id - 1  # لأن Telethon عداد الرسائل ينزل (الأرقام تصغر مع الرسائل القديمة)
+            prev_message = await client.get_messages(channel, ids=prev_id)
 
-                if prev_message:
-                    logger.info(f'Forwarding previous message [{prev_message.id}]')
-                    await client.forward_messages(forward_to, prev_message)
-                else:
-                    logger.warning('No previous message found to forward')
-                break
+            if prev_message:
+                print(f'Forwarding previous message [{prev_message.id}]')
+                await client.forward_messages(forward_to, prev_message)
+            else:
+                print('No previous message found to forward')
+            # لو عايز توقف عند أول نتيجة، اعمل return أو break
+            break
 
-        if not found_message:
-            logger.info(f'Starting telethon_task for {download_id}')
-            asyncio.create_task(telethon_task(yt_link, download_id, keyword))
-    except Exception as e:
-        logger.error(f"Error in search_messages: {e}")
-        downloads[download_id]["status"] = "error"
+    if found_message == False:
+        future = asyncio.run_coroutine_threadsafe(telethon_task(yt_link, download_id, keyword), telethon_loop)
 
-# ====== دوال Telethon ======
+# ====== دوال Telethon (كما في الكود الأساسي) ======
 async def wait_for_message_with_button(bot_username, button_text, timeout=120):
     loop = asyncio.get_event_loop()
     future = loop.create_future()
@@ -92,12 +72,14 @@ async def wait_for_message_with_button(bot_username, button_text, timeout=120):
     async def handler(event):
         msg = event.message
         if msg.buttons:
-            for row in msg.buttons:
-                for btn in row:
-                    if button_text in btn.text.strip():
-                        if not future.done():
-                            future.set_result(event)
-                            return
+            total_buttons = sum(len(row) for row in msg.buttons)
+            if total_buttons > 1:
+                for row in msg.buttons:
+                    for btn in row:
+                        if button_text in btn.text.strip():
+                            if not future.done():
+                                future.set_result(event)
+                                return
 
     try:
         return await asyncio.wait_for(future, timeout)
@@ -124,127 +106,128 @@ async def wait_for_audio(bot_username, timeout=180):
     finally:
         client.remove_event_handler(handler)
 
-# ====== تعديل دالة استقبال الملفات ======
+# ====== تعديل دالة استقبال الملفات من بوت telegram.Bot ======
 @bot.message_handler(content_types=['audio', 'voice', 'document', 'video', 'photo'])
 def send_direct_url(message):
-    try:
-        logger.info("[BOT] Received file, generating direct URL...")
+    print("[DEBUG] Bot received file, generating direct URL...")
 
-        file_id = message.photo[-1].file_id if message.content_type == 'photo' else getattr(message, message.content_type).file_id
+    if message.content_type == 'photo':
+        file_id = message.photo[-1].file_id
+    else:
+        file_id = getattr(message, message.content_type).file_id
 
-        resp = requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-            params={"file_id": file_id},
-            timeout=10
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        file_path = data["result"]["file_path"]
-        direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-
-        # البحث عن تحميل مطابق
-        for dl_id, info in downloads.items():
-            if info["status"] == "processing" and info["direct_url"] is None:
-                downloads[dl_id]["direct_url"] = direct_url
-                downloads[dl_id]["status"] = "done"
-                logger.info(f"Direct URL ready for {dl_id}: {direct_url}")
-                break
-
-        bot.reply_to(message, f"✅ الرابط المباشر:\n{direct_url}")
-    except Exception as e:
-        logger.error(f"Error generating direct URL: {e}")
+    resp = requests.get(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+        params={"file_id": file_id}
+    )
+    data = resp.json()
+    if not data.get("ok"):
         bot.reply_to(message, "❌ حصل خطأ وأنا بجيب الرابط")
+        return
+
+    file_path = data["result"]["file_path"]
+    direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+
+    # احنا ما نعرفش download_id هنا مباشرة، نحتاج طريقة لربط الرابط بالتحميل الصحيح.
+    # الحل: نبحث في النص عن Download ID، أو نخزن آخر تحميل مؤقتا.
+
+    # مثال هنا نفترض آخر تحميل في downloads هو آخر عنصر مفتوح
+    # (يمكن تحسينه حسب تصميمك)
+    for dl_id, info in downloads.items():
+        if info["status"] == "processing" and info["direct_url"] is None:
+            downloads[dl_id]["direct_url"] = direct_url
+            downloads[dl_id]["status"] = "done"
+            print(f"[DEBUG] Direct URL ready for download_id {dl_id}: {direct_url}")
+            break
+
+    bot.reply_to(message, f"✅ الرابط المباشر:\n{direct_url}")
 
 # ====== المهمة الرئيسية لـ Telethon ======
 async def telethon_task(video_url, download_id, keyword):
-    try:
-        logger.info(f"Sending video URL to YouTube bot: {video_url}")
-        await client.send_message(BOT_YT, video_url)
+    print(f"[DEBUG] Sending video URL to YouTube bot: {video_url}")
+    await client.send_message(BOT_YT, video_url)
 
-        logger.info("Waiting for 🔉 button...")
-        event = await wait_for_message_with_button(BOT_YT, "🔉")
-        if not event:
-            logger.warning("Button not found")
-            downloads[download_id]["status"] = "error"
-            return
+    print("[DEBUG] Waiting for 🔉 button...")
+    event = await wait_for_message_with_button(BOT_YT, "🔉")
+    if not event:
+        print("[DEBUG] Button not found")
+        downloads[download_id]["status"] = "error"
+        return
 
-        msg = event.message
-        clicked = False
-        for r, row in enumerate(msg.buttons):
-            for c, btn in enumerate(row):
-                if "🔉" in btn.text.strip():
-                    await msg.click(r, c)
-                    logger.info(f"Clicked button: {btn.text.strip()}")
-                    clicked = True
-                    break
-            if clicked:
+    msg = event.message
+    for r, row in enumerate(msg.buttons):
+        for c, btn in enumerate(row):
+            if "🔉" in btn.text.strip():
+                asyncio.create_task(msg.click(r, c))
+                print(f"[DEBUG] Clicked button at [{r},{c}] with text {btn.text.strip()}")
                 break
 
-        logger.info("Waiting for audio message...")
-        audio_event = await wait_for_audio(BOT_YT)
-        if not audio_event:
-            logger.warning("No audio received")
-            downloads[download_id]["status"] = "error"
-            return
-
-        audio_msg = audio_event.message
-        await client.forward_messages(files_channel, audio_msg)
-        await client.send_message(files_channel, keyword)
-        await client.forward_messages(BOT_FORWARD_ID, audio_msg)
-        logger.info("Forwarded audio to direct-link bot")
-    except Exception as e:
-        logger.error(f"Error in telethon_task: {e}")
+    print("[DEBUG] Waiting for audio message...")
+    audio_event = await wait_for_audio(BOT_YT)
+    if not audio_event:
+        print("[DEBUG] No audio received")
         downloads[download_id]["status"] = "error"
+        return
 
-# ====== إدارة دورة حياة Telethon ======
-def run_telethon():
-    global client_ready_event, telethon_loop
-    
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    telethon_loop = loop  # <-- حفظ حلقة الأحداث
-    
-    while True:
-        try:
-            logger.info("Starting Telethon client...")
-            with client:
-                logger.info("Telethon client started successfully!")
-                client_ready_event.set()
-                client.run_until_disconnected()
-        except Exception as e:
-            logger.error(f"Telethon crashed: {e}")
-            client_ready_event.clear()
-            time.sleep(10)
-            logger.info("Restarting Telethon...")
+    audio_msg = audio_event.message
+    await client.forward_messages(files_channel, audio_msg)
+    await client.send_message(files_channel, keyword)
+    await client.forward_messages(BOT_FORWARD_ID, audio_msg)
+    print("[DEBUG] Forwarded audio to direct-link bot")
+
+telethon_loop = asyncio.new_event_loop()
+client_ready_event = threading.Event()
+def start_client():
+    global telethon_loop
+    print("[DEBUG] Starting Telethon client...")
+    asyncio.set_event_loop(telethon_loop)
+
+    async def runner():
+        await client.start()
+        print("[DEBUG] Telethon connected and authorized")
+        client_ready_event.set()  # هنا بنعلم إن client جاهز
+
+    telethon_loop.run_until_complete(runner())
+    telethon_loop.run_forever()
 
 # ====== Flask Endpoints ======
+
+# 1) نبدأ التحميل ونعطي download_id فوراً:
 @app.route("/url")
 def get_url():
     if not client_ready_event.is_set():
         return jsonify({"error": "Service not ready, please try again later"}), 503
 
+    global telethon_loop
+    if telethon_loop is None:
+        return jsonify({"error": "Service not ready, please try again later"}), 503
+
     yt_link = request.args.get("link")
     if not yt_link:
         return jsonify({"error": "No link provided"}), 400
-    
     yt_id = get_video_id(yt_link)
-    if not yt_id:
-        return jsonify({"error": "Invalid YouTube link"}), 400
 
     download_id = str(uuid.uuid4())
     downloads[download_id] = {"status": "processing", "direct_url": None}
 
-    logger.info(f"API request: {yt_link}, download_id: {download_id}")
+    print(f"[DEBUG] API request received for link: {yt_link}, download_id: {download_id}")
     
-    # البحث عن الرسالة باستخدام حلقة الأحداث الصحيحة
-    asyncio.run_coroutine_threadsafe(
-        search_messages(files_channel, yt_id, yt_link, download_id), 
-        telethon_loop  # <-- استخدام المتغير الذي حفظناه
-    )
+    # نبحث عن الرسالة
+    future_search = asyncio.run_coroutine_threadsafe(search_messages(files_channel, yt_id, yt_link, download_id), telethon_loop)
+    try:
+        future_search.result(timeout=15)  # ممكن تحط timeout مناسب
+    except Exception as e:
+        print(f"[ERROR] Searching messages failed: {e}")
+
+    # ننفذ مهمة telethon_task داخل الـ event loop الخاص به:
+    # future = asyncio.run_coroutine_threadsafe(telethon_task(yt_link, download_id), telethon_loop)
+
+    # ما نستنى نخلص (future.result()) هنا، نرجع download_id فوراً:
+    # لو تريد تنتظر، يمكن تعمل future.result() لكن مع خطر timeout.
 
     return jsonify({"download_id": download_id, "status": "started"})
 
+# 2) نتحقق من حالة التحميل:
 @app.route("/status")
 def check_status():
     download_id = request.args.get("id")
@@ -253,36 +236,12 @@ def check_status():
 
     return jsonify(downloads[download_id])
 
-# ====== الصفحة الرئيسية ======
-@app.route('/')
-def home():
-    telethon_status = "Connected" if client_ready_event.is_set() else "Disconnected"
-    return f"Flask + Telebot + Telethon is running!<br>Telethon status: {telethon_status}"
-
-# ====== بدء الخدمات ======
-def start_services():
-    global client_ready_event
-    
-    client_ready_event.clear()
-    
-    telethon_thread = threading.Thread(target=run_telethon, daemon=True, name="TelethonThread")
-    telethon_thread.start()
-    
-    if not client_ready_event.wait(timeout=60):
-        logger.error("Telethon failed to start within timeout")
-    
-    bot_thread = threading.Thread(
-        target=lambda: bot.infinity_polling(logger_level=logging.INFO),
-        daemon=True,
-        name="TelebotThread"
-    )
-    bot_thread.start()
-    
-    logger.info("All services started successfully")
-
-# ====== تهيئة التطبيق ======
+# ====== Main ======
 if __name__ == "__main__":
-    start_services()
+    threading.Thread(target=start_client, daemon=True).start()
+
+    # انتظر حتى client يبدأ
+    client_ready_event.wait()
+
+    threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
     app.run(host="0.0.0.0", port=8000)
-else:
-    start_services()
