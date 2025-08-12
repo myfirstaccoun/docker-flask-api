@@ -21,7 +21,8 @@ files_channel = -1002765670994
 BOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
 CHAT_ID = 123456789  # ID المحادثة اللي هيجيلها الرابط
 
-client = TelegramClient("session_name", API_ID, API_HASH)
+session_str = ''
+client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
 bot = telebot.TeleBot(BOT_TOKEN)
 
 app = Flask(__name__)
@@ -238,5 +239,9 @@ def check_status():
 # ====== Main ======
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
+
+    # انتظر حتى client يبدأ
+    client_ready_event.wait()
+
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8080)
