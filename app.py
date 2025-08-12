@@ -248,8 +248,8 @@ def check_status():
 if __name__ == "__main__":
     threading.Thread(target=start_client, daemon=True).start()
 
-    # # انتظر حتى client يبدأ
-    # client_ready_event.wait()
+    # انتظر حتى client يبدأ
+    client_ready_event.wait()
 
     threading.Thread(target=lambda: bot.polling(non_stop=True), daemon=True).start()
     app.run(host="0.0.0.0", port=8000)
