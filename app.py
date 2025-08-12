@@ -14,8 +14,9 @@ CORS(app)
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
-session_str = ''
-client = TelegramClient(StringSession(session_str), API_ID, API_HASH, loop=loop)
+# session_str = ''
+# client = TelegramClient(StringSession(session_str), API_ID, API_HASH, loop=loop)
+client = TelegramClient('session_name', API_ID, API_HASH)
 
 # فقط شغل start() بشكل عادي
 client.start()
