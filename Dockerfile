@@ -31,5 +31,4 @@ ENV FLASK_APP=app.py
 EXPOSE 8000
 
 # تشغيل Gunicorn بـ Worker واحد و4 Threads لتفادي مشكلة SQLite
-CMD ["gunicorn", "--bind", ":8000", "--workers", "1", "--threads", "4", "app:app"]
-
+CMD ["gunicorn", "--bind", ":8000", "--workers", "1", "--threads", "1", "app:app"]
