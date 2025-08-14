@@ -64,6 +64,6 @@ def run_telethon():
     loop.run_forever()
 
 if __name__ == '__main__':
-    threading.Thread(target=run_telethon, daemon=True).start()  # Telethon
     threading.Thread(target=run_telebot, daemon=True).start()   # Telebot
+    threading.Thread(target=run_telethon, daemon=True).start()  # Telethon
     run_flask()  # Flask main thread
