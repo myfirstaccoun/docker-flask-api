@@ -18,17 +18,25 @@ bot = telebot.TeleBot(TELEBOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# عميل Telethon (بدون تحديد loop هنا)
+# عميل Telethon
 client = TelegramClient('session_name', API_ID, API_HASH)
 
-# تشغيل Telethon في الخلفية داخل thread مع event loop خاص
+# تشغيل Telethon في الخلفية
 def run_telethon():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(client.start())
     loop.run_forever()
 
-# مسار Flask
+# تشغيل Telebot في الخلفية
+def run_telebot():
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=0, timeout=20)
+        except Exception as e:
+            print(f"خطأ في Telebot: {e}")
+
+# Flask route
 @app.route('/', methods=['GET'])
 def send_message():
     message = request.args.get('message', 'Hello from Flask+Telethon via GET!')
@@ -36,12 +44,11 @@ def send_message():
     async def send():
         await client.send_message(BOT_YT, message)
 
-    # إرسال الرسالة إلى loop الخاص بـ Telethon
     asyncio.run_coroutine_threadsafe(send(), client.loop)
 
     return jsonify({'status': 'message sent', 'to': BOT_YT, 'message': message})
 
-# أوامر Telebot
+# Telebot commands
 @bot.message_handler(commands=['start'])
 def start_command(message):
     bot.reply_to(message, "مرحباً! البوت شغال مع Telethon و Flask مع بعض 🚀")
@@ -50,19 +57,6 @@ def start_command(message):
 def echo_all(message):
     bot.reply_to(message, f"انت كتبت: {message.text}")
 
-# تشغيل Telebot في thread منفصل مع معالجة الأخطاء
-def run_telebot():
-    while True:
-        try:
-            bot.polling(none_stop=True, interval=0, timeout=20)
-        except Exception as e:
-            print(f"خطأ في Telebot: {e}")
-
-# تشغيل Flask في thread منفصل (أو في main thread إذا شغال مع gunicorn)
-def run_flask():
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
-
-if __name__ == '__main__':
-    threading.Thread(target=run_telethon, daemon=True).start()
-    threading.Thread(target=run_telebot, daemon=True).start()
-    run_flask()
+# تشغيل الثريدات فور الاستيراد (حتى مع gunicorn)
+threading.Thread(target=run_telethon, daemon=True).start()
+threading.Thread(target=run_telebot, daemon=True).start()
