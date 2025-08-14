@@ -1,4 +1,3 @@
-
 from telethon import TelegramClient
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -19,16 +18,15 @@ bot = telebot.TeleBot(TELEBOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# Event loop خاص بـ Telethon
-loop = asyncio.new_event_loop()
-client = TelegramClient('session_name', API_ID, API_HASH, loop=loop)
+# عميل Telethon (بدون تحديد loop هنا)
+client = TelegramClient('session_name', API_ID, API_HASH)
 
-# تشغيل Telethon في الخلفية
+# تشغيل Telethon في الخلفية داخل thread مع event loop خاص
 def run_telethon():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     loop.run_until_complete(client.start())
     loop.run_forever()
-
-threading.Thread(target=run_telethon, daemon=True).start()
 
 # مسار Flask
 @app.route('/', methods=['GET'])
@@ -38,7 +36,8 @@ def send_message():
     async def send():
         await client.send_message(BOT_YT, message)
 
-    asyncio.run_coroutine_threadsafe(send(), loop)
+    # إرسال الرسالة إلى loop الخاص بـ Telethon
+    asyncio.run_coroutine_threadsafe(send(), client.loop)
 
     return jsonify({'status': 'message sent', 'to': BOT_YT, 'message': message})
 
@@ -51,7 +50,7 @@ def start_command(message):
 def echo_all(message):
     bot.reply_to(message, f"انت كتبت: {message.text}")
 
-# تشغيل Telebot في thread منفصل
+# تشغيل Telebot في thread منفصل مع معالجة الأخطاء
 def run_telebot():
     while True:
         try:
@@ -59,10 +58,11 @@ def run_telebot():
         except Exception as e:
             print(f"خطأ في Telebot: {e}")
 
-# تشغيل Flask في thread منفصل
+# تشغيل Flask في thread منفصل (أو في main thread إذا شغال مع gunicorn)
 def run_flask():
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
 if __name__ == '__main__':
+    threading.Thread(target=run_telethon, daemon=True).start()
     threading.Thread(target=run_telebot, daemon=True).start()
     run_flask()
