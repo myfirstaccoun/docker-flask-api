@@ -1,4 +1,3 @@
-from telethon.sessions import StringSession
 from telethon import TelegramClient
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -19,7 +18,7 @@ bot = telebot.TeleBot(TELEBOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# Event loop مخصص لـ Telethon
+# Event loop خاص بـ Telethon
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
@@ -27,7 +26,7 @@ asyncio.set_event_loop(loop)
 client = TelegramClient('session_name', API_ID, API_HASH, loop=loop)
 client.start()
 
-# مسار Flask لإرسال رسالة إلى البوت
+# مسار Flask
 @app.route('/', methods=['GET'])
 def send_message():
     message = request.args.get('message', 'Hello from Flask+Telethon via GET!')
@@ -41,22 +40,21 @@ def send_message():
 
 # أوامر Telebot
 @bot.message_handler(commands=['start'])
-def handle_start(message):
-    bot.reply_to(message, "أهلاً! هذا البوت يشتغل مع Telethon و Flask في نفس الوقت 🚀")
+def start_command(message):
+    bot.reply_to(message, "مرحباً! البوت شغال مع Telethon و Flask مع بعض 🚀")
 
 @bot.message_handler(func=lambda m: True)
-def handle_all(message):
+def echo_all(message):
     bot.reply_to(message, f"انت كتبت: {message.text}")
 
-# تشغيل Telebot في ثريد منفصل
+# تشغيل Telebot في thread منفصل
 def run_telebot():
     bot.polling(none_stop=True)
 
-# تشغيل Flask في ثريد منفصل
+# تشغيل Flask في thread منفصل
 def run_flask():
-    app.run(debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
-# تشغيل الكل
 if __name__ == '__main__':
-    threading.Thread(target=run_telebot).start()
-    threading.Thread(target=run_flask).start()
+    threading.Thread(target=run_telebot, daemon=True).start()
+    run_flask()
