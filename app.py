@@ -25,11 +25,18 @@ client = TelegramClient('session_name', API_ID, API_HASH)
 def run_telethon():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    loop.run_until_complete(client.start())
+
+    async def init_telethon():
+        await client.connect()
+        if not await client.is_user_authorized():
+            await client.start()
+
+    loop.run_until_complete(init_telethon())
     loop.run_forever()
 
 # تشغيل Telebot في الخلفية
 def run_telebot():
+    bot.remove_webhook()  # إزالة أي ويب هوك قبل polling
     while True:
         try:
             bot.polling(none_stop=True, interval=0, timeout=20)
@@ -57,6 +64,6 @@ def start_command(message):
 def echo_all(message):
     bot.reply_to(message, f"انت كتبت: {message.text}")
 
-# تشغيل الثريدات فور الاستيراد (حتى مع gunicorn)
+# تشغيل الثريدات فور الاستيراد
 threading.Thread(target=run_telethon, daemon=True).start()
 threading.Thread(target=run_telebot, daemon=True).start()
