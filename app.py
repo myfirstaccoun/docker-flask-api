@@ -18,52 +18,40 @@ bot = telebot.TeleBot(TELEBOT_TOKEN)
 app = Flask(__name__)
 CORS(app)
 
-# عميل Telethon
+# Telethon
 client = TelegramClient('session_name', API_ID, API_HASH)
 
-# تشغيل Telethon في الخلفية
-def run_telethon():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# Telebot
+bot = telebot.AsyncTeleBot(TELEBOT_TOKEN)
 
-    async def init_telethon():
-        await client.connect()
-        if not await client.is_user_authorized():
-            await client.start()
+# إلغاء أي webhook موجود
+bot.remove_webhook()
 
-    loop.run_until_complete(init_telethon())
-    loop.run_forever()
-
-# تشغيل Telebot في الخلفية
-def run_telebot():
-    bot.remove_webhook()  # إزالة أي ويب هوك قبل polling
-    while True:
-        try:
-            bot.polling(none_stop=True, interval=0, timeout=20)
-        except Exception as e:
-            print(f"خطأ في Telebot: {e}")
-
-# Flask route
 @app.route('/', methods=['GET'])
 def send_message():
-    message = request.args.get('message', 'Hello from Flask+Telethon via GET!')
-
+    message = request.args.get('message', 'Hello!')
     async def send():
         await client.send_message(BOT_YT, message)
-
-    asyncio.run_coroutine_threadsafe(send(), client.loop)
-
+    asyncio.run(send())
     return jsonify({'status': 'message sent', 'to': BOT_YT, 'message': message})
 
-# Telebot commands
+# أوامر Telebot
 @bot.message_handler(commands=['start'])
-def start_command(message):
-    bot.reply_to(message, "مرحباً! البوت شغال مع Telethon و Flask مع بعض 🚀")
+async def start_command(message):
+    await bot.reply_to(message, "مرحباً! النظام بيشتغل بأقل استهلاك 🚀")
 
 @bot.message_handler(func=lambda m: True)
-def echo_all(message):
-    bot.reply_to(message, f"انت كتبت: {message.text}")
+async def echo_all(message):
+    await bot.reply_to(message, f"انت كتبت: {message.text}")
 
-# تشغيل الثريدات فور الاستيراد
-threading.Thread(target=run_telethon, daemon=True).start()
-threading.Thread(target=run_telebot, daemon=True).start()
+async def main():
+    await client.start()
+    await asyncio.gather(
+        bot.infinity_polling(timeout=60, skip_pending=True),
+    )
+
+if __name__ == '__main__':
+    import threading
+    # تشغيل Flask في thread
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False), daemon=True).start()
+    asyncio.run(main())
