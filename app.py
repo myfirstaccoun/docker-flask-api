@@ -14,6 +14,15 @@ BOT_YT = '@BotYouTubeDownloadBot'
 TELEBOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
 bot = telebot.TeleBot(TELEBOT_TOKEN)
 
+# إعدادات Telethon
+API_ID = 29224979
+API_HASH = 'c43959fea9767802e111a4c6cf3b16ec'
+BOT_YT = '@BotYouTubeDownloadBot'
+
+# إعدادات Telebot
+TELEBOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
+bot = telebot.TeleBot(TELEBOT_TOKEN)
+
 # Flask
 app = Flask(__name__)
 CORS(app)
