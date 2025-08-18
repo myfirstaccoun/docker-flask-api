@@ -141,7 +141,7 @@ def serve_file(filename):
     return send_from_directory(DOWNLOADS_DIR, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(threaded=True, port=5000)
+    app.run(threaded=True, port=8000)
 
 # @app.route('/', methods=['GET'])
 # def serve_file():
