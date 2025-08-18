@@ -1,31 +1,109 @@
-from telethon import TelegramClient, events
-import telebot
+import os
+import uuid
+import threading
 import asyncio
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from telethon import TelegramClient, events
+from telethon.tl.types import DocumentAttributeAudio
 
-# إعدادات Telethon
+app = Flask(__name__)
+CORS(app)
+
+# ===== إعدادات Telethon =====
 API_ID = 29224979
 API_HASH = 'c43959fea9767802e111a4c6cf3b16ec'
-BOT_YT = '@BotYouTubeDownloadBot'
+SESSION_FILE = 'session_name.session'
+DOWNLOADS_DIR = 'downloads'
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
-# إعدادات Telebot
-TELEBOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"
-bot = telebot.TeleBot(TELEBOT_TOKEN)
+# Status tracking dictionary
+download_status = {}
 
-# Event loop
-loop = asyncio.get_event_loop()
-client = TelegramClient('session_name', API_ID, API_HASH, loop=loop)
+def parse_link(link):
+    """Parse Telegram link into channel and message ID"""
+    link = link.replace("t.me/", "").split("/")
+    if len(link) < 2:
+        raise ValueError("Invalid link format")
+    channel = link[0]
+    try:
+        message_id = int(link[-1])
+    except ValueError:
+        raise ValueError("Message ID must be an integer")
+    return channel, message_id
 
-# مثال: استقبال من BOT_YT عبر Telethon والرد عن طريق Telebot
-@client.on(events.NewMessage(from_users=BOT_YT))
-async def handle_yt_reply(event):
-    print(f"[رد من {BOT_YT}]: {event.text}")
-    # إرسال رسالة لأي يوزر/شات عبر Telebot
-    bot.send_message(chat_id=123456789, text=f"البوت رد: {event.text}")
+async def async_download_media(channel, message_id, download_id):
+    """Asynchronous download function"""
+    try:
+        async with TelegramClient(SESSION_FILE, API_ID, API_HASH) as client:
+            message = await client.get_messages(channel, ids=message_id)
+            if not message or not message.media:
+                download_status[download_id] = {'status': 'error', 'message': 'Media not found'}
+                return
 
-async def main():
-    await client.start()
-    # إرسال رسالة إلى BOT_YT
-    await client.send_message(BOT_YT, "hello")
+            # Find audio document
+            audio_doc = None
+            if hasattr(message, 'document') and message.document:
+                for attr in message.document.attributes:
+                    if isinstance(attr, DocumentAttributeAudio):
+                        audio_doc = message.document
+                        break
 
-loop.run_until_complete(main())
-client.run_until_disconnected()
+            if not audio_doc:
+                download_status[download_id] = {'status': 'error', 'message': 'No audio found'}
+                return
+
+            filename = f"{download_id}.m4a"
+            file_path = os.path.join(DOWNLOADS_DIR, filename)
+            await client.download_media(audio_doc, file_path)
+            download_status[download_id] = {
+                'status': 'done',
+                'file_path': file_path,
+                'filename': filename
+            }
+    except Exception as e:
+        download_status[download_id] = {'status': 'error', 'message': str(e)}
+
+def download_task(channel, message_id, download_id):
+    """Run the async download in a new event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(async_download_media(channel, message_id, download_id))
+    loop.close()
+
+@app.route('/download', methods=['GET'])
+def download_audio():
+    link = request.args.get('link')
+    if not link:
+        return jsonify({'error': 'Missing link parameter'}), 400
+    
+    try:
+        channel, message_id = parse_link(link)
+        download_id = str(uuid.uuid4())
+        
+        # Start download in background thread
+        download_status[download_id] = {'status': 'processing'}
+        threading.Thread(
+            target=download_task,
+            args=(channel, message_id, download_id),
+            daemon=True
+        ).start()
+        
+        return jsonify({
+            'download_id': download_id,
+            'status': 'processing'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/status/<download_id>', methods=['GET'])
+def check_status(download_id):
+    status = download_status.get(download_id, {'status': 'unknown'})
+    return jsonify(status)
+
+@app.route('/download/<filename>', methods=['GET'])
+def serve_file(filename):
+    return send_from_directory(DOWNLOADS_DIR, filename, as_attachment=True)
+
+if __name__ == '__main__':
+    app.run(threaded=True, port=5000)
