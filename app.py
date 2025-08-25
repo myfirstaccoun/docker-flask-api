@@ -1,34 +1,61 @@
+import os
+import time
 import telebot
 import requests
+import threading
+from flask import Flask
 
-BOT_TOKEN = "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw"  # من BotFather
+# توكن البوت
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8403385790:AAEPnBveQG2TuBQuYjRwTXc3MXp5T4T0NHw")
 
 bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 
+# هاندلر استقبال الملفات
 @bot.message_handler(content_types=['audio', 'voice', 'document', 'video', 'photo'])
 def send_direct_url(message):
-    # لو نوع الرسالة صورة (photo) بيبقى عبارة عن لست، بناخد أكبر جودة
-    if message.content_type == 'photo':
-        file_id = message.photo[-1].file_id
-    else:
-        file_id = getattr(message, message.content_type).file_id
+    try:
+        # لو صورة: بناخد آخر واحدة (أعلى جودة)
+        if message.content_type == 'photo':
+            file_id = message.photo[-1].file_id
+        else:
+            file_id = getattr(message, message.content_type).file_id
 
-    # نجيب معلومات الملف
-    resp = requests.get(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-        params={"file_id": file_id}
-    )
-    data = resp.json()
-    if not data.get("ok"):
-        bot.reply_to(message, f"❌ حصل خطأ: {data}")
-        return
+        # نجيب معلومات الملف
+        resp = requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+            params={"file_id": file_id}
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            bot.reply_to(message, f"❌ حصل خطأ: {data}")
+            return
 
-    file_path = data["result"]["file_path"]
+        file_path = data["result"]["file_path"]
 
-    # نبني الرابط المؤقت المباشر
-    direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        # نبني الرابط المباشر المؤقت
+        direct_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
 
-    # نرد على المستخدم بالرابط
-    bot.reply_to(message, f"✅ الرابط المباشر (صالح لفترة قصيرة):\n{direct_url}")
+        # نرد على المستخدم بالرابط
+        bot.reply_to(message, f"✅ الرابط المباشر (صالح لفترة قصيرة):\n{direct_url}")
 
-bot.polling()
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {e}")
+
+# صفحة افتراضية للـ health check
+@app.route("/")
+def home():
+    return "Bot is running!", 200
+
+# تشغيل البوت في Thread منفصل
+def run_bot():
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=0, timeout=20)
+        except Exception as e:
+            print(f"❌ Error in polling: {e}")
+            time.sleep(5)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot).start()
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
