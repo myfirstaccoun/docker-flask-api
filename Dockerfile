@@ -13,10 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # نسخ باقي الملفات
 COPY app.py .
-COPY session_name.session .  # لو فعلاً البوت محتاج الجلسة دي
+# COPY session_name.session .  # لو فعلاً البوت محتاج الجلسة دي
 
 # فتح البورت الافتراضي
 EXPOSE 10000
 
 # تشغيل البوت + السيرفر
 CMD ["python", "app.py"]
+
