@@ -6,7 +6,7 @@ import threading
 from flask import Flask
 
 # توكن البوت
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8047115821:AAEaBiEbkRkbfcLEF6JszlKi9Hm3chjGN5U")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8317193483:AAGbiITDQSBl-253WKwQXpDx1oD_m_QEyZQ")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
